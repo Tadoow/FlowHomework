@@ -1,10 +1,15 @@
 package otus.homework.flowcats
 
-import androidx.lifecycle.*
+import android.util.Log
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class CatsViewModel(
     private val catsRepository: CatsRepository
@@ -15,17 +20,20 @@ class CatsViewModel(
 
     init {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                catsRepository.listenForCatFacts().collect {
-                    _catsLiveData.value = it
+            catsRepository.listenForCatFacts()
+                .flowOn(Dispatchers.IO)
+                .collect {
+                    when (it) {
+                        is Result.Success<*> -> _catsLiveData.value = it.data as Fact
+                        is Result.Error -> Log.d("CatsViewModel", it.exception.toString())
+                    }
                 }
-            }
         }
     }
 }
 
 class CatsViewModelFactory(private val catsRepository: CatsRepository) :
     ViewModelProvider.NewInstanceFactory() {
-    override fun <T : ViewModel?> create(modelClass: Class<T>): T =
+    override fun <T : ViewModel> create(modelClass: Class<T>): T =
         CatsViewModel(catsRepository) as T
 }
