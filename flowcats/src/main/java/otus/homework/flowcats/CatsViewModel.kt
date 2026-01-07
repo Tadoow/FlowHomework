@@ -1,34 +1,39 @@
 package otus.homework.flowcats
 
-import android.util.Log
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 class CatsViewModel(
     private val catsRepository: CatsRepository
 ) : ViewModel() {
 
-    private val _catsLiveData = MutableLiveData<Fact>()
-    val catsLiveData: LiveData<Fact> = _catsLiveData
+    private val _catsState = MutableStateFlow<Fact?>(null)
+    val catsState: StateFlow<Fact?> = _catsState.asStateFlow()
+
+    private val _catsErrors = MutableSharedFlow<String>()
+    val catsError: SharedFlow<String> = _catsErrors.asSharedFlow()
 
     init {
-        viewModelScope.launch {
-            catsRepository.listenForCatFacts()
-                .flowOn(Dispatchers.IO)
-                .collect {
-                    when (it) {
-                        is Result.Success<*> -> _catsLiveData.value = it.data as Fact
-                        is Result.Error -> Log.d("CatsViewModel", it.exception.toString())
-                    }
+        catsRepository.listenForCatFacts()
+            .onEach {
+                when (it) {
+                    is Result.Success<*> -> _catsState.value = it.data as? Fact
+                    is Result.Error -> _catsErrors.emit(it.exception.message ?: "Unknown exception")
                 }
-        }
+            }
+            .flowOn(Dispatchers.IO)
+            .launchIn(viewModelScope)
     }
 }
 
